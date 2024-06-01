@@ -3,6 +3,7 @@ import time
 import numpy as np
 import open3d as o3d
 import teaserpp_python
+import argparse
 
 NOISE_BOUND = 0.05
 N_OUTLIERS = 1700
@@ -22,30 +23,20 @@ if __name__ == "__main__":
     print("        TEASER++ Python registration example      ")
     print("==================================================")
 
+    parser = argparse.ArgumentParser(description="Run TEASER++ on two point clouds.")
+
+    # Add arguments
+    parser.add_argument("input1", type=str, help="Path to the first input point cloud file.")
+    parser.add_argument("input2", type=str, help="Path to the second input point cloud file.")
+    parser.add_argument("--output", type=str, help="Path to the output file to save results.", default=None)
+    args = parser.parse_args()
+
     # Load bunny ply file
-    src_cloud = o3d.io.read_point_cloud("../example_data/bun_zipper_res3.ply")
+    src_cloud = o3d.io.read_point_cloud(args.input1)
     src = np.transpose(np.asarray(src_cloud.points))
-    N = src.shape[1]
 
-    # Apply arbitrary scale, translation and rotation
-    T = np.array(
-        [[9.96926560e-01, 6.68735757e-02, -4.06664421e-02, -1.15576939e-01],
-         [-6.61289946e-02, 9.97617877e-01, 1.94008687e-02, -3.87705398e-02],
-         [4.18675510e-02, -1.66517807e-02, 9.98977765e-01, 1.14874890e-01],
-         [0, 0, 0, 1]])
-
-    dst_cloud = copy.deepcopy(src_cloud)
-    dst_cloud.transform(T)
+    dst_cloud = o3d.io.read_point_cloud(args.input2)
     dst = np.transpose(np.asarray(dst_cloud.points))
-
-    # Add some noise
-    dst += (np.random.rand(3, N) - 0.5) * 2 * NOISE_BOUND
-
-    # Add some outliers
-    outlier_indices = np.random.randint(N_OUTLIERS, size=N_OUTLIERS)
-    for i in range(outlier_indices.size):
-        shift = OUTLIER_TRANSLATION_LB + np.random.rand(3, 1) * (OUTLIER_TRANSLATION_UB - OUTLIER_TRANSLATION_LB)
-        dst[:, outlier_indices[i]] += shift.squeeze()
 
     # Populating the parameters
     solver_params = teaserpp_python.RobustRegistrationSolver.Params()
@@ -53,9 +44,9 @@ if __name__ == "__main__":
     solver_params.noise_bound = NOISE_BOUND
     solver_params.estimate_scaling = False
     solver_params.rotation_estimation_algorithm = teaserpp_python.RobustRegistrationSolver.ROTATION_ESTIMATION_ALGORITHM.GNC_TLS
-    solver_params.rotation_gnc_factor = 1.4
-    solver_params.rotation_max_iterations = 100
-    solver_params.rotation_cost_threshold = 1e-12
+    solver_params.rotation_gnc_factor = 5
+    solver_params.rotation_max_iterations = 500
+    solver_params.rotation_cost_threshold = 1e-30
 
     solver = teaserpp_python.RobustRegistrationSolver(solver_params)
     start = time.time()
@@ -64,25 +55,24 @@ if __name__ == "__main__":
 
     solution = solver.getSolution()
 
+    transformation = np.hstack((solution.rotation, (solution.translation).reshape(-1, 1)))
+    transformation = np.concatenate((transformation, ((np.array([0, 0, 0, 1])).reshape(-1, 1)).T), axis=0)
+
+    src_cloud.transform(transformation)
+
+
     print("=====================================")
     print("          TEASER++ Results           ")
     print("=====================================")
 
-    print("Expected rotation: ")
-    print(T[:3, :3])
     print("Estimated rotation: ")
     print(solution.rotation)
-    print("Error (rad): ")
-    print(get_angular_error(T[:3,:3], solution.rotation))
 
-    print("Expected translation: ")
-    print(T[:3, 3])
     print("Estimated translation: ")
     print(solution.translation)
-    print("Error (m): ")
-    print(np.linalg.norm(T[:3, 3] - solution.translation))
 
-    print("Number of correspondences: ", N)
-    print("Number of outliers: ", N_OUTLIERS)
+    if args.output:
+        with open(args.output, 'w') as file:
+            file.write(str(solution.rotation) + "\n" + str(solution.translation))
     print("Time taken (s): ", end - start)
 
