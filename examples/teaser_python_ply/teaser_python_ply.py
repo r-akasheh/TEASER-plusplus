@@ -4,6 +4,7 @@ import numpy as np
 import open3d as o3d
 import teaserpp_python
 import argparse
+import multiprocessing as mp
 
 NOISE_BOUND = 0.05
 N_OUTLIERS = 1700
@@ -18,27 +19,21 @@ def get_angular_error(R_exp, R_est):
     return abs(np.arccos(min(max(((np.matmul(R_exp.T, R_est)).trace() - 1) / 2, -1.0), 1.0)));
 
 
-if __name__ == "__main__":
+def python_teaser(queue: mp.Queue, output: str = ""):
     print("==================================================")
     print("        TEASER++ Python registration example      ")
     print("==================================================")
 
-    parser = argparse.ArgumentParser(description="Run TEASER++ on two point clouds.")
-
-    # Add arguments
-    parser.add_argument("input1", type=str, help="Path to the first input point cloud file.")
-    parser.add_argument("input2", type=str, help="Path to the second input point cloud file.")
-    parser.add_argument("--output", type=str, help="Path to the output file to save results.", default=None)
-    args = parser.parse_args()
-
     # Load bunny ply file
-    src_cloud = o3d.io.read_point_cloud(args.input1)
+    print("reading file 1")
+    src_cloud = o3d.io.read_point_cloud("/input-data/src_pcd.ply")
     src = np.transpose(np.asarray(src_cloud.points))
-
-    dst_cloud = o3d.io.read_point_cloud(args.input2)
+    print("reading file 2")
+    dst_cloud = o3d.io.read_point_cloud("/input-data/trg_pcd.ply")
     dst = np.transpose(np.asarray(dst_cloud.points))
-
+    print("read files")
     # Populating the parameters
+    print("setting solver params")
     solver_params = teaserpp_python.RobustRegistrationSolver.Params()
     solver_params.cbar2 = 1
     solver_params.noise_bound = NOISE_BOUND
@@ -48,8 +43,10 @@ if __name__ == "__main__":
     solver_params.rotation_max_iterations = 500
     solver_params.rotation_cost_threshold = 1e-30
 
+    print("starting solver")
     solver = teaserpp_python.RobustRegistrationSolver(solver_params)
     start = time.time()
+    print("solving")
     solver.solve(src, dst)
     end = time.time()
 
@@ -71,8 +68,10 @@ if __name__ == "__main__":
     print("Estimated translation: ")
     print(solution.translation)
 
-    if args.output:
-        with open(args.output, 'w') as file:
+    if output:
+        with open(output, 'w') as file:
             file.write(str(solution.rotation) + "\n" + str(solution.translation))
     print("Time taken (s): ", end - start)
+
+    queue.put(solution)
 
