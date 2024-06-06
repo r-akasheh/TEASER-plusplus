@@ -26,10 +26,10 @@ def python_teaser(queue: mp.Queue):
 
     # Load bunny ply file
     print("reading file 1")
-    src_cloud = o3d.io.read_point_cloud("/input-data/src_pcd.ply")
+    src_cloud = o3d.io.read_point_cloud("/input_data/src_pcd.ply")
     src = np.transpose(np.asarray(src_cloud.points))
     print("reading file 2")
-    dst_cloud = o3d.io.read_point_cloud("/input-data/trg_pcd.ply")
+    dst_cloud = o3d.io.read_point_cloud("/input_data/trg_pcd.ply")
     dst = np.transpose(np.asarray(dst_cloud.points))
     print("read files")
     # Populating the parameters
